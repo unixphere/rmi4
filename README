@@ -1,0 +1,106 @@
+rmi_bus.c
+---------
+This is the actual bus implementation. It contains functions to register
+three different types of devices/drivers: physical devices, device drivers and
+rmi function drivers.
+
+- The physical devices are the underlaying physical protocol buses, such as i2c
+and spi. They are connected through the rmi_register_phys_device() call.
+
+- The device drivers are ordinary device drivers that are connected to a device.
+They connect to the bus through the rmi_register_driver() call. The bus calls
+the drivers probe function when a device that needs the driver is present.
+
+- The rmi function drivers are the implementation of an rmi function. When a new
+rmi function is added or removed this is communicated to the device drivers
+through a fh_add() call. This lets the device driver act accordingly on the
+event.
+The rmi functions are connected through the rmi_register_function_driver() call.
+
+rmi_i2c.c
+---------
+This is the layer that connects i2c devices to the rmi bus. It basically
+contains communication functions for read/read_block/write/write_block that
+are handed to the driver through function pointers.
+
+rmi_spi.c
+---------
+This is the layer that connects spi v1 and v2 devices to the rmi bus. It works
+in the same way as rmi_i2c.c.
+
+rmi_driver.c
+------------
+This is currently the only rmi device driver available and is the driver that
+connects to an arbitrary rmi compatible device and dynamically assigns supported
+rmi functions by iterating its PDT and comparing with the currently registered
+rmi functions.
+
+It should be noted that a missing RMI function is not fatal, since they can
+be hooked in at a later time (typically through insmod) and the driver will
+then get notified and the device's functionality will be extended accordingly.
+
+The driver contains a static implementation of the f01 function since this is a
+mandatory function and is needed for dispatching irqs to the other functions.
+The f01 function is however implemented in its own file rmi_f01.c and is
+statically linked to the module.
+
+The resulting .ko file be called rmi_generic.ko.
+
+rmi_f[0-9]{2}.c
+---------------
+These files contain the different rmi function implementations. They are
+implemented as kernel modules which registers to the bus by calling
+rmi_register_function_driver().
+
+Each rmi_f-file allocates its own private data and gets attention events on
+any irq that is directed to this function. It is important to keep each rmi_f-
+implementation modular without any external dependencies!
+
+The interface is defined as:
+- init() - Init any data structures and configure the device.
+- attention(irq_bits) - Handle any attention if any.
+- suspend() - Handle any suspend functionality if any.
+- resume() - Handle any resume functionality if any.
+- remove() - Shutdown the device properly and free any data structures.
+
+Note that the attention call includes a bit field containing information on
+which irqs that has been asserted for each specific function. This is needed
+for functions that can raise multiple irqs.
+
+platform data
+-------------
+The platform data can be reached all the way up to the rmi_f-implementations
+and can be easily expanded with new variables. The idea is to let each rmi_f
+handle its own parsing and configuration of the platform data.
+
+Platform data is mandatory since it contains driver_name for the bus's
+matching function and irq set up.
+
+To retreive the platform data in the rmi_f-implementation one should use the
+to_rmi_platform_data() that converts a driver pointer to a platform data pointer.
+
+Example: Connecting a device
+----------------------------
+The patch below is what needs to be altered in a board file to attach an
+rmi device on the i2c bus.
+
++static int synaptics_gpio_config(void)
++{
++       /* setup gpio here */
++       return 0;
++}
++
++static struct rmi_device_platform_data synaptics_platformdata = {
++       .driver_name = "rmi-generic",
++       .irq = SYNAPTICS_IRQ,
++       .irq_polarity = RMI_IRQ_ACTIVE_LOW,
++       .gpio_config = synaptics_gpio_config,
++};
++
++static struct i2c_board_info __initdata beagle_i2c_2[] = {
++       {
++               I2C_BOARD_INFO("rmi-i2c", 0x70),
++               .platform_data = &synaptics_platformdata,
++       },
++};
+
