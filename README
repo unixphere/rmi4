@@ -1,3 +1,18 @@
+Synaptics RMI4 Linux bus structure
+----------------------------------
+
+
+This implements a bus structure for Synaptics' RMI4 devices, such as touch pads. In this version
+the f01 and f11 RMI functions are implemented which gives support for touch screens. 
+
+The project is hosted at Unixpheres homepage:
+http://www.unixphere.com/projects/rmi4.html
+
+It has been contributed and are under considiration for integration to the Linux kernel on the
+following branch:
+http://git.kernel.org/?p=linux/kernel/git/dtor/input.git;a=shortlog;h=refs/heads/synaptics-rmi4
+
+
 rmi_bus.c
 ---------
 This is the actual bus implementation. It contains functions to register
